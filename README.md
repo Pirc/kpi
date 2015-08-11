@@ -51,21 +51,28 @@ As an example, let's go back to the `/member/unsubscribe` tracker.  In order for
 
 ```
 {
-  name: "Unsubscribes"
-  desc: "Members who have unsubscribed from the system"
+  tracker: "counter",
+  name: "Unsubscribes",
+  desc: "Members who have unsubscribed from the system",
   hourly: {
-    current: 33490
+    current: 334903,
     histogram: [
       2, 0, 0, 3, 2, 3, 0, 0, 0, 1, 0, 0, 2, 3, 6, 4, ...
     ]
   }
   daily: {
-    current: 1079
+    current: 10795,
     histogram: [
-      10, 2, 30, 34, 15
+      10, 2, 30, 34, 15, ...
+    ]
+  }
+  weekly: {
+    current: 1580,
+    histogram: [
+      10, 2, 30, 34, 15, ...
     ]
   }
 } 
 ```
 
-The Unsubscribe tracker is a counter, and rather than just presenting counts we are instead tracking histograms across predetermined time periods.  This should be configurable, but it's reasonable to say that we will track hourly stats for the last 24 hours, daily stats for the last week, and weekly stats for the last year, for example.  If you would like to know what the count is for the last hour, day, or week you would simply take the first element from the histogram.  If you'd like to build out a histogram you would simply take the histogram element as the data source and feed that into whatever graphing software you would need.
+The Unsubscribe tracker is a counter, and rather than just presenting counts we are instead tracking histograms across predetermined time periods.  This should be configurable, but it's reasonable to say that we will track hourly stats for the last 24 hours, daily stats for the last week, and weekly stats for the last year, for example.  If you would like to know what the count is for the last hour, day, or week you would simply take the first element from the histogram.  If you'd like to build out a histogram you would simply take the histogram element as the data source and feed that into whatever graphing software you are using.
