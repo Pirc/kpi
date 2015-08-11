@@ -40,3 +40,32 @@ This will have the effect of sending a Status message to an "instance tracker". 
 You may have noticed that the _path_ argument, which is the first argument passed in to `KPI.tracker()` follows a hierarchical path-like structure, just like a filesystem or an Akka actor system.  When any application passes a _path_ into the `tracker` object, the system will use that path to attempt to locate that tracker.  It will do so by walking an tracker hierarchy.  All of the trackers are rooted in the main "master tracker".   If at any point in walking down the hierarchy we don't find a child at the specified path, a new one is created and we then walk through that child to get to the ultimately arrive at the correct tracker object.
 
 The hierarchy is important.  This structure is what makes it possible for us to have a generic UI of KPI's that don't necessarily require new UI work when new KPI's are added to the system.  Imagine, for example, a file explorer type of interface where the "directories" may all be expanded and the individual "files" viewed.  As the application grows and becomes more complex, and there are more areas that you need visibility into you can simply add more calls to teh `KPI.tracker()` object and those new trackers are created on demand in the system and then are automatically visible in the generic tracker UI.
+
+## Using the Trackers for Reporting
+
+Thus far, we've looked at the logging side of the Tracker object, where events in the application may be logged as they happen.  The next round of questions deals with how we access the logged information.  What format is the informaiton in?  How is this "tracker hierarchy" exposed to dashboards?  How do we obtain just one tracker's worth of information?
+
+The ultimate goal of this package is to make it as quick and easy as possible to add new trackers to your code, and to be able to see the trackers in a generic UI.  An add-on project here will be to create UI's for displaying certain types of trackers, but at this point that is a secondary concern.  Get the data first, make it pretty later.  These trackers will all be physically located on a KPI machine which will house the dashboard app.  All other machines in the system will need to be able to send tracker requests to this machine, and this machine in turn will serve the current tracker states back to requesting dashboard UI's.  The requesting UI's will be remote, e.g. running in an administrator's web browser, so the data format we discuss here is for a single tracker's state in JSON format.
+
+As an example, let's go back to the `/member/unsubscribe` tracker.  In order for the dashboard to be able to show statistics for unsubscribe activity in the system, it will need to submit a REST request to get that data.  We'll be submitting the request to a special Play module that provides tracker endpoints as a hierarchy of REST resources.  In this example, the URL will be `GET /member/unsubscribe` and the result will contain the current in-memory statistics that the Unsubscribe tracker contains, which may look like this:
+
+```
+{
+  name: "Unsubscribes"
+  desc: "Members who have unsubscribed from the system"
+  hourly: {
+    current: 33490
+    histogram: [
+      2, 0, 0, 3, 2, 3, 0, 0, 0, 1, 0, 0, 2, 3, 6, 4, ...
+    ]
+  }
+  daily: {
+    current: 1079
+    histogram: [
+      10, 2, 30, 34, 15
+    ]
+  }
+} 
+```
+
+The Unsubscribe tracker is a counter, and rather than just presenting counts we are instead tracking histograms across predetermined time periods.  This should be configurable, but it's reasonable to say that we will track hourly stats for the last 24 hours, daily stats for the last week, and weekly stats for the last year, for example.  If you would like to know what the count is for the last hour, day, or week you would simply take the first element from the histogram.  If you'd like to build out a histogram you would simply take the histogram element as the data source and feed that into whatever graphing software you would need.
