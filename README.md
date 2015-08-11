@@ -22,7 +22,21 @@ What I really wanted to have was a way to quickly add new KPI's to the system th
 What I really want to be able to do in my source code is to add a line of code here or there when certain events happen that will, under the sheets, make the related metrics available to other applications (such as admin apps).  For exmaple, here is how I would like to bump a counter:
 
 ```
-  KPI.tracker("member.unsubscribe", member.getId)
+  KPI.tracker("/member/unsubscribe", Instance(member.getId))
 ```
 
 This may happen on any of the application servers in the system, and the result will be that one counter somewhere in the distributed architecture will be notified and able to track, in-memory, what the current count of unsubscribed members is and will be able to report out standard counts (hourly, daily, weekly) of unsubscribe activity as well as the last _n_ members who unsubscribed.
+
+In this example, `member.unsubscribe` is a "static counter," meaning that there is one instance of this counter in the system that is constantly present.  Another example of a tracker would be one that tracks the creation of an individual Pircular, or one that tracks a single instance of a deal ingest.  In this case, the code would look something like this:
+
+```
+   KPI.tracker(s"/member/pircular/_${member.getId}", Status("Starting Walgreens crawl"))
+```
+
+This will have the effect of sending a Status message to an "instance tracker".  Unlike the static counter, there may be many instances of an instance tracker in the system, and the special "_" character will indicate to the system that an instance tracker is required.  In this example, there may be a few dozen instances of the "/member/pircular" tracker running, one for each of the Pirculars being generated at any point in time, and the tracker itself will keep, say, the last 10 status messages that the application has emitted about this Pircular along with timestamps of when those messages came in and any other information that the application choosed to send in.
+
+## Tracker Paths
+
+You may have noticed that the _path_ argument, which is the first argument passed in to `KPI.tracker()` follows a hierarchical path-like structure, just like a filesystem or an Akka actor system.  When any application passes a _path_ into the `tracker` object, the system will use that path to attempt to locate that tracker.  It will do so by walking an tracker hierarchy.  All of the trackers are rooted in the main "master tracker".   If at any point in walking down the hierarchy we don't find a child at the specified path, a new one is created and we then walk through that child to get to the ultimately arrive at the correct tracker object.
+
+The hierarchy is important.  This structure is what makes it possible for us to have a generic UI of KPI's that don't necessarily require new UI work when new KPI's are added to the system.  Imagine, for example, a file explorer type of interface where the "directories" may all be expanded and the individual "files" viewed.  As the application grows and becomes more complex, and there are more areas that you need visibility into you can simply add more calls to teh `KPI.tracker()` object and those new trackers are created on demand in the system and then are automatically visible in the generic tracker UI.
