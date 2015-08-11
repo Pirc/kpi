@@ -16,3 +16,13 @@ Consider the following examples of things I need my admin app to do:
 The thing about all of these items is that they typically require one-off work, per metric, to get the counts and any other supporting information needed for the dashboard.  Even worse, as new applications are created, adding new measurements to the admin app doesn't get any easier.  Sometimes we will sometimes even need to execute queries against the production database to get at the numbers, which can have a performance impact on the production OLTP system.  And if you want to have more visibility you will need to have more queries running against the database.
 
 What I really wanted to have was a way to quickly add new KPI's to the system that exerted little or no load on the application, that came with a default UI that would make the KPI's available to a generic administrative KPI inpector without needing to do any additional UI work, that could also serve as a place where administrative functions (e.g. launching a particular crawl or sending a test Pircular to a particular user) could be done in a clean way.  That is why I started coding the **KPI** package.
+
+## What this Looks Like in Code
+
+What I really want to be able to do in my source code is to add a line of code here or there when certain events happen that will, under the sheets, make the related metrics available to other applications (such as admin apps).  For exmaple, here is how I would like to bump a counter:
+
+```
+  KPI.tracker("member.unsubscribe", member.getId)
+```
+
+This may happen on any of the application servers in the system, and the result will be that one counter somewhere in the distributed architecture will be notified and able to track, in-memory, what the current count of unsubscribed members is and will be able to report out standard counts (hourly, daily, weekly) of unsubscribe activity as well as the last _n_ members who unsubscribed.
