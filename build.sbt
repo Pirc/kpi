@@ -4,8 +4,10 @@ name := "kpi"
 crossScalaVersions := Seq("2.11.7", "2.10.5")
 scalaVersion := crossScalaVersions.value.head
 scalacOptions := Seq("-deprecation", "-unchecked", "-feature")
-
+        
 libraryDependencies ++= Seq (
+    "com.typesafe.akka" %% "akka-kernel" % "2.3.12"
+  , "com.typesafe.akka" %% "akka-remote" % "2.3.12"
 )
 
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
