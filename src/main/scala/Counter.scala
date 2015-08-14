@@ -4,6 +4,12 @@ class Counter(val hvc: HistogramValueCalculator) {
   val hourly = new Histogram(24, 60*60, hvc)
   val daily = new Histogram(30, 60*60*24, hvc)
   val weekly = new Histogram(52, 60*60*24*7, hvc)
+
+  def bump(amt: Int) = {
+    hourly.bump(amt)
+    daily.bump(amt)
+    weekly.bump(amt)
+  }
 }
 
 /**
@@ -23,19 +29,12 @@ class Histogram(val sampleCount: Int,
                  val secondsPerSample: Int,
                  val hvc: HistogramValueCalculator)
 {
-  var currentOffset: Long = _
+  var currentOffset: Long = calculateOffset
 
   var samples = List[Int]()
 
- /**
-  * Finds the current offset and uses the populate(offset) method to 
-  * initialize the histogram to the correct values.*
-  */
-  def initialize = { 
-    currentOffset = calculateOffset
-    Range.Long(currentOffset+1 - sampleCount, currentOffset+1, 1)
-      .foreach { offset => samples = hvc.calculateValue(offset)::samples }
-  }
+  Range.Long(currentOffset+1 - sampleCount, currentOffset+1, 1)
+    .foreach { offset => samples = hvc.calculateValue(offset)::samples }
 
  /**
   * Figures out if the current front of the histogram is still correct,
