@@ -76,3 +76,8 @@ As an example, let's go back to the `/member/unsubscribe` tracker.  In order for
 ```
 
 The Unsubscribe tracker is a counter, and rather than just presenting counts we are instead tracking histograms across predetermined time periods.  This should be configurable, but it's reasonable to say that we will track hourly stats for the last 24 hours, daily stats for the last week, and weekly stats for the last year, for example.  If you would like to know what the count is for the last hour, day, or week you would simply take the first element from the histogram.  If you'd like to build out a histogram you would simply take the histogram element as the data source and feed that into whatever graphing software you are using.
+
+## Other Ideas to Think Through...
+
+* `LogTracker` that creates a new Slack channel and posts to Slack (so that we are able to track certain processes as they happen).
+* Slack "slash commands" for interacting with the Tracker hierarchy.
