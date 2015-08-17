@@ -22,7 +22,7 @@ class RootTracker extends Tracker {
   }
 }
 
-class Tracker extends Actor {
+object Tracker {
  /**
   * Find messages are sent to Trackers when an application is trying to 
   * obtain an instance of a Tracker to send information to.  The 
@@ -30,26 +30,45 @@ class Tracker extends Actor {
   * from the root to get down to a particular tracker.
   */
   case class Find(path: String)
+
+ /**
+  * When a Tracker is found as the result of a Find(path) request, the 
+  * ActorRef that was found is sent back as a Found() object.
+  */
+  case class Found(ref: ActorRef)
  
  /**
   * List messages are used to obtain a list of children of this Tracker.
   */
   case class List()
 
+  case class Status()
  /**
-  * Execute messages are sent to Trackers in order to kick off some application
-  * defined action in the system.
+  * Execute messages are sent to Trackers in order to kick off some 
+  * application defined action in the system.
   */
   case class Execute(action: String)
+}
 
+class Tracker extends Actor {
   override def receive = {
-    case Find(path) => findAndForward(path)
+    case Tracker.Find(path) => findAndForward(path)
+    case Tracker.Status() => println(s"received Status() request in ${self.path.name}")
   }
 
+ /**
+  * Receives a slash-delmited list of strings and returns a Tuple2, the first
+  * member being the first slash-delmited string the second be the remainder
+  * of the path.
+  */
   protected def parseParts(path: String) = {
     (path.split("/").head, path.split("/").tail.mkString("/"))
   }
 
+ /**
+  * Looks in the list of this actors children for a child that has the
+  * given name.
+  */
   private def findChild(thisElem: String): Option[ActorRef] = {
     context.children
       .filter { child => child.path.name == thisElem }
@@ -65,8 +84,12 @@ class Tracker extends Actor {
     findChild(thisElem)
       .map { childRef => {
         remainder match {
-          case "" => context.sender ! context.self
-          case path: String => childRef forward Find(path)
+          // If there is no remainder, then we are at the path that was 
+          // requested - send self back to the original caller.
+          case "" => context.sender ! Tracker.Found(childRef)
+          // If there are additional path elements to walk, then forward
+          // the request on down the line.
+          case path: String => childRef forward Tracker.Find(path)
         }
       }}
   }
@@ -76,9 +99,17 @@ class Tracker extends Actor {
   }
 }
 
-class CounterTracker(val hvc: HistogramValueCalculator) extends Actor {
+object CounterTracker {
   case class Bump(amount: Int = 1)
+}
 
+/**
+ * The CounterTracker is a tracker that counts "bumps" that it receives over
+ * a period of time, and creates histograms based on the number of bumps
+ * received.  The contructor receives a HistogramValueCalculator instance
+ * so that it knows how to initialize the histogram on instantiation.
+ */
+class CounterTracker(val hvc: HistogramValueCalculator) extends Actor {
   val counter = new Counter(hvc)
 
   override def receive = {
