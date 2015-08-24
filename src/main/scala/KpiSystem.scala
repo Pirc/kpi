@@ -22,6 +22,6 @@ class TrackerClient {
 
 In the app:
 
-val unsubs = new TrackerClient("members.unsubscribes")
+val unsubs = new TrackerClient("/members/unsubscribes")
 unsubs.send(CounterTracker.Bump())
 */
