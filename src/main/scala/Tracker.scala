@@ -15,8 +15,9 @@ class RootTracker extends Tracker {
   * to skip that first (empty) element.
   */
   protected override def parseParts(path: String) = {
-    path.split("/").head match {
-      case "" => super.parseParts(path.split("/").tail.mkString("/"))
+    path.split("/").headOption match {
+      case None => (Some(self), "")
+      case Some("") => super.parseParts(path.split("/").tail.mkString("/"))
       case _ => throw new RuntimeException(s"path ${path} must start with /")
     }
   }
@@ -52,17 +53,21 @@ object Tracker {
 
 class Tracker extends Actor {
   override def receive = {
-    case Tracker.Find(path) => findAndForward(path)
+    case Tracker.Find(path) => 
+      println(s"processing find request for ${path}")
+      findAndForward(path)
     case Tracker.Status() => println(s"received Status() request in ${self.path.name}")
   }
 
  /**
-  * Receives a slash-delmited list of strings and returns a Tuple2, the first
-  * member being the first slash-delmited string the second be the remainder
-  * of the path.
+  * The job of this method is to receive a String that represents a
+  * starting from this actor's position in the tree, to split that path
+  * on the "/" delimiter, and to then resolve the path to 2 components:
+  * an Optional actor ref pointing to the next child in the tree and the
+  * remainder of the path after that.
   */
-  protected def parseParts(path: String) = {
-    (path.split("/").head, path.split("/").tail.mkString("/"))
+  protected def parseParts(path: String): Tuple2[Option[ActorRef], String] = {
+    (findChild(path.split("/").head), path.split("/").tail.mkString("/"))
   }
 
  /**
@@ -70,18 +75,22 @@ class Tracker extends Actor {
   * given name.
   */
   private def findChild(thisElem: String): Option[ActorRef] = {
-    context.children
-      .filter { child => child.path.name == thisElem }
-      .headOption
-      .orElse {
-        Some(createChild(thisElem))
+    Option(thisElem)
+      .filter { s => s.size > 0 }
+      .flatMap { thisPathElem => 
+        context.children
+          .filter { child => child.path.name == thisElem }
+          .headOption
+          .orElse {
+            Some(createChild(thisElem))
+          }
       }
   }
 
   def findAndForward(path: String) = {
     val (thisElem, remainder) = parseParts(path)
 
-    findChild(thisElem)
+    thisElem
       .map { childRef => {
         remainder match {
           // If there is no remainder, then we are at the path that was 
@@ -92,6 +101,9 @@ class Tracker extends Actor {
           case path: String => childRef forward Tracker.Find(path)
         }
       }}
+      .orElse {
+        throw new RuntimeException(s"something went wrong finding path <${path}>")
+      }
   }
 
   def createChild(path: String): ActorRef = {
@@ -109,10 +121,12 @@ object CounterTracker {
  * received.  The contructor receives a HistogramValueCalculator instance
  * so that it knows how to initialize the histogram on instantiation.
  */
-class CounterTracker(val hvc: HistogramValueCalculator) extends Actor {
+class CounterTracker(val hvc: HistogramValueCalculator) extends Tracker {
   val counter = new Counter(hvc)
 
-  override def receive = {
-    case Bump(amount) => counter.bump(amount)
+  override def receive = counterReceive orElse super.receive
+
+  def counterReceive: Actor.Receive = {
+    case CounterTracker.Bump(amount) => counter.bump(amount)
   }
 }

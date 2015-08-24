@@ -1,7 +1,7 @@
 package pirc.kpi
 
 import com.typesafe.config.ConfigFactory
-import akka.actor.{ActorRef, ActorSelection, ActorSystem, Props}
+import akka.actor.{Actor, ActorRef, ActorSelection, ActorSystem, Props}
 
 object Kpi {
   val system = ActorSystem("Kpi", ConfigFactory.load())
@@ -11,6 +11,7 @@ object Kpi {
 class TrackerClient {
   class LocalActor extends Actor {
     override def receive = {
+      case a:Any => println("received " + a.toString)
     }
   }
   def locate(path: String) = {
