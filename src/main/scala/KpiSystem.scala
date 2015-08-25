@@ -8,14 +8,26 @@ object Kpi {
   val root = system.actorOf(Props[RootTracker], name = "root")
 }
 
-class TrackerClient {
-  class LocalActor extends Actor {
-    override def receive = {
-      case a:Any => println("received " + a.toString)
-    }
+object Client {
+  val system = ActorSystem("TrackedApp", ConfigFactory.load())
+}
+
+class LocalActor extends Actor {
+  var tracker: Option[ActorRef] = None
+
+  override def receive = {
+    case Tracker.Find(path) => Kpi.root ! Tracker.Find(path)
+    case Tracker.Found(ref) => 
+      print(s"received tracker ref back from kpi root: ${ref.path}")
+      tracker = Some(ref)
+    case Tracker.Response(json) => println(json)
+    case a:Any => tracker.map { ref => ref ! a }
   }
-  def locate(path: String) = {
-  }
+}
+
+class TrackerClient(val path: String) {
+  val actor = Client.system.actorOf(Props[LocalActor])
+  actor ! Tracker.Find(path)
 }
 
 

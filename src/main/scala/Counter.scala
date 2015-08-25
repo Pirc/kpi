@@ -1,5 +1,7 @@
 package pirc.kpi
 
+import scala.collection.JavaConverters._
+
 class Counter(val hvc: HistogramValueCalculator) {
   val hourly = new Histogram(24, 60*60, hvc)
   val daily = new Histogram(30, 60*60*24, hvc)
@@ -10,6 +12,11 @@ class Counter(val hvc: HistogramValueCalculator) {
     daily.bump(amt)
     weekly.bump(amt)
   }
+
+  def status = Map( "hourly" -> hourly.samples.asJava
+                  , "daily" -> daily.samples.asJava
+                  , "weekly" -> weekly.samples.asJava
+                  ).asJava
 }
 
 /**
@@ -45,7 +52,6 @@ class Histogram(val sampleCount: Int,
   private def pad: Int = {
     val shouldBe = calculateOffset
     if(shouldBe != currentOffset) {
-      println(s"shouldBe: ${shouldBe}, but is: ${currentOffset}")
       Range.Long( Math.max(currentOffset+1, shouldBe+1-sampleCount)
                 , shouldBe+1, 1)
         .foreach { offset => samples = 0::samples }
@@ -74,4 +80,12 @@ class Histogram(val sampleCount: Int,
  */
 trait HistogramValueCalculator {
   def calculateValue(offset: Long): Int
+}
+
+object HistogramValueCalculator {
+  def apply(name: String) = {
+    new HistogramValueCalculator {
+      def calculateValue(offset: Long): Int = 0
+    }
+  }
 }

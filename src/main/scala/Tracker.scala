@@ -1,5 +1,9 @@
 package pirc.kpi
 
+import scala.collection.JavaConverters._
+
+import com.fasterxml.jackson.databind.ObjectMapper
+
 import akka.actor.{Actor, ActorRef, Props}
 
 /**
@@ -49,15 +53,29 @@ object Tracker {
   * application defined action in the system.
   */
   case class Execute(action: String)
+
+  case class Response(json: String)
 }
 
 class Tracker extends Actor {
+  private val mapper = new ObjectMapper
+
   override def receive = {
     case Tracker.Find(path) => 
-      println(s"processing find request for ${path}")
       findAndForward(path)
-    case Tracker.Status() => println(s"received Status() request in ${self.path.name}")
+    case Tracker.Status() => 
+      context.sender ! Tracker.Response(
+        mapper.writeValueAsString(status)
+      )
+    case Tracker.List() =>
+      context.sender ! Tracker.Response(
+        mapper.writeValueAsString(
+          context.children.map { child => child.path.name }.asJava 
+        )
+      )
   }
+
+  def status: Any = "ok"
 
  /**
   * The job of this method is to receive a String that represents a
@@ -106,13 +124,20 @@ class Tracker extends Actor {
       }
   }
 
-  def createChild(path: String): ActorRef = {
-    context.actorOf(Props[Tracker], name = path)
+  def createChild(name: String): ActorRef = {
+    name match {
+      case CounterTracker.Match(ctrType) => 
+        context.actorOf(Props[CounterTracker], name = name)
+      case _ => 
+        context.actorOf(Props[Tracker], name = name)
+    }
   }
 }
 
 object CounterTracker {
+  val Match = "(.*)Ctr$".r
   case class Bump(amount: Int = 1)
+  case class Initialize()
 }
 
 /**
@@ -121,12 +146,17 @@ object CounterTracker {
  * received.  The contructor receives a HistogramValueCalculator instance
  * so that it knows how to initialize the histogram on instantiation.
  */
-class CounterTracker(val hvc: HistogramValueCalculator) extends Tracker {
-  val counter = new Counter(hvc)
+class CounterTracker extends Tracker {
+  lazy val counter = new Counter(HistogramValueCalculator(self.path.name))
+
+  override def preStart = self ! CounterTracker.Initialize()
 
   override def receive = counterReceive orElse super.receive
 
   def counterReceive: Actor.Receive = {
+    case CounterTracker.Initialize => counter
     case CounterTracker.Bump(amount) => counter.bump(amount)
   }
+
+  override def status: Any = counter.status
 }

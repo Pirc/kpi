@@ -8,6 +8,8 @@ scalacOptions := Seq("-deprecation", "-unchecked", "-feature")
 libraryDependencies ++= Seq (
     "com.typesafe.akka" %% "akka-kernel" % "2.3.12"
   , "com.typesafe.akka" %% "akka-remote" % "2.3.12"
+  , "com.fasterxml.jackson.core" % "jackson-core" % "2.2.2"
+  , "com.fasterxml.jackson.core" % "jackson-databind" % "2.2.2"
 )
 
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
