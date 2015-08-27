@@ -10,6 +10,8 @@ libraryDependencies ++= Seq (
   , "com.typesafe.akka" %% "akka-remote" % "2.3.12"
   , "com.fasterxml.jackson.core" % "jackson-core" % "2.2.2"
   , "com.fasterxml.jackson.core" % "jackson-databind" % "2.2.2"
+  , "javax.inject" % "javax.inject" % "1"
+  , "com.google.inject" % "guice" % "3.0"
 )
 
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
