@@ -1,6 +1,7 @@
 package pirc.kpi
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.Stack
 
 import com.fasterxml.jackson.databind.ObjectMapper
 
@@ -20,7 +21,7 @@ class RootTracker extends Tracker {
   */
   protected override def parseParts(path: String) = {
     path.split("/").headOption match {
-      case None => (Some(self), "")
+      case  None => (Some(self), "")
       case Some("") => super.parseParts(path.split("/").tail.mkString("/"))
       case _ => throw new RuntimeException(s"path ${path} must start with /")
     }
@@ -28,6 +29,7 @@ class RootTracker extends Tracker {
 }
 
 object Tracker {
+  case class Initialize()
  /**
   * Find messages are sent to Trackers when an application is trying to 
   * obtain an instance of a Tracker to send information to.  The 
@@ -55,14 +57,28 @@ object Tracker {
   case class Execute(action: String)
 
   case class Response(json: String)
+
+  val factories = Stack[PartialFunction[String, Props]]()
+
+  def props(name: String): Props = {
+    factories
+      .find { pf => pf.isDefinedAt(name) }
+      .map { pf => pf.apply(name) }
+      .getOrElse { Props[Tracker] }
+  }
 }
 
 class Tracker extends Actor {
   private val mapper = new ObjectMapper
+  private var tracked: Option[ActorRef] = None
+
+  override def preStart = self ! Tracker.Initialize()
+
+  def initialize = { }
 
   override def receive = {
-    case Tracker.Find(path) => 
-      findAndForward(path)
+    case Tracker.Initialize => initialize
+    case Tracker.Find(path) => findAndForward(path)
     case Tracker.Status() => 
       context.sender ! Tracker.Response(
         mapper.writeValueAsString(status)
@@ -73,6 +89,9 @@ class Tracker extends Actor {
           context.children.map { child => child.path.name }.asJava 
         )
       )
+    // If the Tracker has received an object it doesn't know about, 
+    // then just send it on to the 
+    case a: Any => tracked.map { t => t ! a }
   }
 
   def status: Any = "ok"
@@ -113,7 +132,9 @@ class Tracker extends Actor {
         remainder match {
           // If there is no remainder, then we are at the path that was 
           // requested - send self back to the original caller.
-          case "" => context.sender ! Tracker.Found(childRef)
+          case "" => 
+            tracked = Some(context.sender)
+            context.sender ! Tracker.Found(childRef)
           // If there are additional path elements to walk, then forward
           // the request on down the line.
           case path: String => childRef forward Tracker.Find(path)
@@ -125,38 +146,6 @@ class Tracker extends Actor {
   }
 
   def createChild(name: String): ActorRef = {
-    name match {
-      case CounterTracker.Match(ctrType) => 
-        context.actorOf(Props[CounterTracker], name = name)
-      case _ => 
-        context.actorOf(Props[Tracker], name = name)
-    }
+    context.actorOf(Tracker.props(name), name = name)
   }
-}
-
-object CounterTracker {
-  val Match = "(.*)Ctr$".r
-  case class Bump(amount: Int = 1)
-  case class Initialize()
-}
-
-/**
- * The CounterTracker is a tracker that counts "bumps" that it receives over
- * a period of time, and creates histograms based on the number of bumps
- * received.  The contructor receives a HistogramValueCalculator instance
- * so that it knows how to initialize the histogram on instantiation.
- */
-class CounterTracker extends Tracker {
-  lazy val counter = new Counter(HistogramValueCalculator(self.path.name))
-
-  override def preStart = self ! CounterTracker.Initialize()
-
-  override def receive = counterReceive orElse super.receive
-
-  def counterReceive: Actor.Receive = {
-    case CounterTracker.Initialize => counter
-    case CounterTracker.Bump(amount) => counter.bump(amount)
-  }
-
-  override def status: Any = counter.status
 }

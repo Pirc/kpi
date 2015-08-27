@@ -2,10 +2,64 @@ package pirc.kpi
 
 import scala.collection.JavaConverters._
 
-class Counter(val hvc: HistogramValueCalculator) {
-  val hourly = new Histogram(24, 60*60, hvc)
-  val daily = new Histogram(30, 60*60*24, hvc)
-  val weekly = new Histogram(52, 60*60*24*7, hvc)
+import akka.actor.{Actor, ActorSystem, Props}
+
+// ----------------------------------------------------------------------
+// 
+//                      C   O   U   N   T   E   R    
+// 
+//                      T   R   A   C   K   E   R
+// 
+// ----------------------------------------------------------------------
+class CounterTrackerClientImpl(system: ActorSystem, path: String) 
+extends TrackerClientImpl(system, path)
+with CounterTrackerClient {
+  def bump(amt: Integer) = {
+    tracker ! CounterTracker.Bump(amt)
+  }
+}
+
+object CounterTracker {
+  val Match = "(.*)Ctr$".r
+
+  Tracker.factories.push({case Match(t) => Props[CounterTracker]})
+
+  case class Bump(amount: Int = 1)
+}
+
+/**
+ * The CounterTracker is a tracker that counts "bumps" that it receives over
+ * a period of time, and creates histograms based on the number of bumps
+ * received.  The contructor receives a HistogramValueCalculator instance
+ * so that it knows how to initialize the histogram on instantiation.
+ */
+class CounterTracker extends Tracker {
+  lazy val counter = new Counter(self.path.name)
+
+  override def initialize = counter
+
+  override def receive = counterReceive orElse super.receive
+
+  def counterReceive: Actor.Receive = {
+    case CounterTracker.Bump(amount) => counter.bump(amount)
+  }
+
+  override def status: Any = counter.status
+}
+
+/**
+ * Counter is the class that the CounterTracker delegates to in order to
+ * accumulate a time-based histogram of bumps from clients.  This class
+ * knows how to process bump requests and how to serve back the map that 
+ * contains the histograms of bump counts.
+ */
+class Counter(val name: String) {
+  val hourly = new Histogram(24, 60*60, 
+    HistogramValueCalculator(s"${name}Hourly"))
+  val daily = new Histogram(30, 60*60*24,
+    HistogramValueCalculator(s"${name}Daily"))
+  val weekly = new Histogram(52, 60*60*24*7,
+    HistogramValueCalculator(s"${name}Weekly"))
 
   def bump(amt: Int) = {
     hourly.bump(amt)
@@ -33,8 +87,8 @@ class Counter(val hvc: HistogramValueCalculator) {
  * new current sample.
  */
 class Histogram(val sampleCount: Int,
-                 val secondsPerSample: Int,
-                 val hvc: HistogramValueCalculator)
+                val secondsPerSample: Int,
+                val hvc: HistogramValueCalculator)
 {
   var currentOffset: Long = calculateOffset
 

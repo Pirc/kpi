@@ -1,6 +1,5 @@
 package pirc.kpi;
 
 public interface TrackerApi {
-    String list(String path);
-    String status(String path);
+    <A extends TrackerClient> A locate(Class<A> clazz, String path);
 }
