@@ -11,7 +11,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class TrackerReaderImpl(val root: ActorRef, val path: String) 
 extends TrackerReader {
-  def execute(fn: String): Unit = findAndSend(Tracker.Execute(fn))
+  def execute(fn: String): String = findAndSend(Tracker.Execute(fn))
   def list(): String = findAndSend(Tracker.List())
   def status(): String = findAndSend(Tracker.Status())
 
@@ -19,9 +19,13 @@ extends TrackerReader {
     implicit val timeout = Timeout(5.seconds)
 
     val futureResp = 
-      for( tracker <- (root ? Tracker.Find(path)).mapTo[Tracker.Found]
-         ; resp <- (tracker.ref ? msg).mapTo[Tracker.Response]
-         ) yield resp.json
+      { root ? Tracker.Find(path) }
+      .collect { 
+        case found: Tracker.Found => found 
+        case resp => throw new pirc.kpi.ex.TrackerException(resp)
+      }
+      .flatMap { tracker => { tracker.ref ? msg }.mapTo[Tracker.Response] }
+      .map { resp => resp.json }
 
     Await.result(futureResp, 10.seconds)
   }

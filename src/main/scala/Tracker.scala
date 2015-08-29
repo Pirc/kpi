@@ -19,10 +19,17 @@ class RootTracker extends Tracker {
   * the path.  It needs to make sure that the path starts with '/', and then
   * to skip that first (empty) element.
   */
-  protected override def parseParts(path: String) = {
+  protected override def parseParts( 
+                            path: String
+                          , findOrBind: (String) => Option[ActorRef]
+                          ) : Tuple2[Option[ActorRef], String] = {
     path.split("/").headOption match {
       case  None => (Some(self), "")
-      case Some("") => super.parseParts(path.split("/").tail.mkString("/"))
+      case Some("") => 
+        path.split("/").tail.mkString("/") match {
+          case "" => super.parseParts("", bindChild _)
+          case path: String => super.parseParts(path, findOrBind)
+        }
       case _ => throw new RuntimeException(s"path ${path} must start with /")
     }
   }
@@ -31,18 +38,33 @@ class RootTracker extends Tracker {
 object Tracker {
   case class Initialize()
  /**
-  * Find messages are sent to Trackers when an application is trying to 
+  * Bind messages are sent to Trackers when an application is trying to 
   * obtain an instance of a Tracker to send information to.  The 
   * path should be a slash-delimited String that indicates a path to follow
-  * from the root to get down to a particular tracker.
+  * from the root to get down to a particular tracker.  If the path does
+  * not exist, then the path elements will be created along the way.  This
+  * means that any legal path that is requested will ultimately find a 
+  * new or previously created Tracker.
+  */
+  case class Bind(path: String)
+
+ /**
+  * Find requests are issued by applications that are looking for a 
+  * particular tracker, but not for the purposes of "binding" to it.  Rather, 
+  * these requests are made by applications would like to gain access
+  * to trackers for the purpose of getting some informaiton or invoking a 
+  * command on the Tracker.
   */
   case class Find(path: String)
+
 
  /**
   * When a Tracker is found as the result of a Find(path) request, the 
   * ActorRef that was found is sent back as a Found() object.
   */
   case class Found(ref: ActorRef)
+
+  case class NotFound(path: String)
  
  /**
   * List messages are used to obtain a list of children of this Tracker.
@@ -57,6 +79,8 @@ object Tracker {
   case class Execute(action: String)
 
   case class Response(json: String)
+
+  case class Shutdown()
 
   val factories = Stack[PartialFunction[String, Props]]()
 
@@ -77,8 +101,12 @@ class Tracker extends Actor {
   def initialize = { }
 
   override def receive = {
-    case Tracker.Initialize => initialize
+    case Tracker.Initialize() => initialize
+    case Tracker.Bind(path) => bindAndForward(path)
     case Tracker.Find(path) => findAndForward(path)
+    case Tracker.Found(t) => 
+      tracked = Some(context.sender)
+      context.sender ! Tracker.Found(self)
     case Tracker.Status() => 
       context.sender ! Tracker.Response(
         mapper.writeValueAsString(status)
@@ -89,9 +117,19 @@ class Tracker extends Actor {
           context.children.map { child => child.path.name }.asJava 
         )
       )
+    case Tracker.Shutdown() =>
+      context.stop(self)
     // If the Tracker has received an object it doesn't know about, 
     // then just send it on to the 
-    case a: Any => tracked.map { t => t ! a }
+    case a: Any => 
+      tracked
+        .map { t => 
+          println(s"Sending ${a} to ${t}")
+          t ! a 
+        }
+        .getOrElse {
+          println(s"Tracker ${self.path} has no tracked actor to send to.")
+        }
   }
 
   def status: Any = "ok"
@@ -103,29 +141,35 @@ class Tracker extends Actor {
   * an Optional actor ref pointing to the next child in the tree and the
   * remainder of the path after that.
   */
-  protected def parseParts(path: String): Tuple2[Option[ActorRef], String] = {
-    (findChild(path.split("/").head), path.split("/").tail.mkString("/"))
+  protected def parseParts( path: String
+                          , findOrBind: (String) => Option[ActorRef]
+                          ) : Tuple2[Option[ActorRef], String] = {
+    (findOrBind(path.split("/").head), path.split("/").tail.mkString("/"))
   }
 
  /**
   * Looks in the list of this actors children for a child that has the
   * given name.
   */
-  private def findChild(thisElem: String): Option[ActorRef] = {
+  protected def findChild(thisElem: String): Option[ActorRef] = {
     Option(thisElem)
       .filter { s => s.size > 0 }
       .flatMap { thisPathElem => 
         context.children
           .filter { child => child.path.name == thisElem }
           .headOption
-          .orElse {
-            Some(createChild(thisElem))
-          }
+      }
+  }
+
+  protected def bindChild(thisElem: String): Option[ActorRef] = {
+    findChild(thisElem)
+      .orElse {
+        Some(context.actorOf(Tracker.props(thisElem), name = thisElem))
       }
   }
 
   def findAndForward(path: String) = {
-    val (thisElem, remainder) = parseParts(path)
+    val (thisElem, remainder) = parseParts(path, findChild _)
 
     thisElem
       .map { childRef => {
@@ -133,19 +177,36 @@ class Tracker extends Actor {
           // If there is no remainder, then we are at the path that was 
           // requested - send self back to the original caller.
           case "" => 
-            tracked = Some(context.sender)
             context.sender ! Tracker.Found(childRef)
           // If there are additional path elements to walk, then forward
           // the request on down the line.
           case path: String => childRef forward Tracker.Find(path)
         }
       }}
-      .orElse {
-        throw new RuntimeException(s"something went wrong finding path <${path}>")
+      .getOrElse {
+        context.sender ! Tracker.NotFound(path)
       }
   }
 
-  def createChild(name: String): ActorRef = {
-    context.actorOf(Tracker.props(name), name = name)
+  def bindAndForward(path: String) = {
+    val (thisElem, remainder) = parseParts(path, bindChild _)
+
+    thisElem
+      .map { childRef => {
+        remainder match {
+          // If there is no remainder, then we are at the path that was 
+          // requested - forward on to the found tracker to save the
+          // requester.
+          case "" => 
+            childRef forward Tracker.Found(childRef)
+            println(s"bound tracker ${childRef.path} to ${context.sender.path}")
+          // If there are additional path elements to walk, then forward
+          // the request on down the line.
+          case path: String => childRef forward Tracker.Bind(path)
+        }
+      }}
+      .orElse {
+        throw new RuntimeException(s"Something went wrong binding to ${path}")
+      }
   }
 }
