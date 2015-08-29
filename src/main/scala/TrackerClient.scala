@@ -5,8 +5,6 @@ import akka.actor.{Actor, ActorRef, ActorSelection, ActorSystem, Props}
 
 class LocalActor extends Actor with TrackerClientActor { 
   override def receive = trackerReceive
-
-  def execute(fn: String) = { }
 }
 
 /**
@@ -26,7 +24,13 @@ trait TrackerClientActor {
 
   var tracker: Option[ActorRef] = None
 
-  def execute(fn: String)
+  def execute(fn: String) = {
+    s"function <${fn}> not defined for ${self.path}"
+  }
+
+  private def doExecute(fn: String) = {
+    context.sender ! Tracker.Response(execute(fn))
+  }
 
   lazy val root = context.actorSelection(
     "akka.tcp://Kpi@kpi.internal.pirc.com:2562/user/root")
@@ -39,7 +43,7 @@ trait TrackerClientActor {
       println(s"received tracker ref back from kpi root: ${ref.path}")
       tracker = Some(ref)
     case Tracker.Response(json) => println(json)
-    case Tracker.Execute(fn) => execute(fn)
+    case Tracker.Execute(fn) => doExecute(fn)
     case a:Any => tracker.map { ref => ref ! a }
   }
 }

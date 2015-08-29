@@ -2,10 +2,15 @@ package pirc.kpi
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Stack
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 import com.fasterxml.jackson.databind.ObjectMapper
 
 import akka.actor.{Actor, ActorRef, Props}
+import akka.pattern.ask
+import akka.util._
 
 /**
  * The Root of the Tracker KPI system will be the Actor that is always known
@@ -120,13 +125,14 @@ class Tracker extends Actor {
     case Tracker.Shutdown() =>
       context.stop(self)
     // If the Tracker has received an object it doesn't know about, 
-    // then just send it on to the 
+    // then just send it on to the tracked actor.
     case a: Any => 
       tracked
-        .map { t => 
-          println(s"Sending ${a} to ${t}")
-          t ! a 
-        }
+        .map { t => {
+          implicit val timeout = Timeout(5.seconds)
+          val futureResp = (t ? a).mapTo[Tracker.Response]
+          context.sender ! Await.result(futureResp, 10.seconds)
+        }}
         .getOrElse {
           println(s"Tracker ${self.path} has no tracked actor to send to.")
         }
