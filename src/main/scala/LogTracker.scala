@@ -50,3 +50,11 @@ with LogTrackerClient {
   def warning(msg: String) = { tracker ! LogTracker.Warning(msg) }
   def error(msg: String) = { tracker ! LogTracker.Error(msg) }
 }
+
+trait LogTrackerClientActor 
+extends TrackerClientActor
+with LogTrackerClient {
+  def info(msg: String) = tracker.map { t => t ! LogTracker.Info(msg) }
+  def warning(msg: String) = tracker.map { t => t ! LogTracker.Warning(msg) }
+  def error(msg: String) = tracker.map { t => t ! LogTracker.Error(msg) }
+}
