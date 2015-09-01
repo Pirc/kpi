@@ -11,14 +11,6 @@ import akka.actor.{Actor, ActorSystem, Props}
 //                      T   R   A   C   K   E   R
 // 
 // ----------------------------------------------------------------------
-class CounterTrackerClientImpl(system: ActorSystem, path: String) 
-extends TrackerClientImpl(system, path)
-with CounterTrackerClient {
-  def bump(amt: Integer) = {
-    tracker ! CounterTracker.Bump(amt)
-  }
-}
-
 object CounterTracker {
   val Match = "(.*)Ctr$".r
 
@@ -142,4 +134,17 @@ object HistogramValueCalculator {
       def calculateValue(offset: Long): Int = 0
     }
   }
+}
+
+class CounterTrackerClientImpl(system: ActorSystem, path: String) 
+extends TrackerClientImpl(system, path)
+with CounterTrackerClient {
+  def bump(amt: Integer) = tracker ! CounterTracker.Bump(amt)
+}
+
+
+trait CounterTrackerClientActor 
+extends TrackerClientActor
+with CounterTrackerClient {
+  def bump(amt: Integer) = tracker.map { t => t ! CounterTracker.Bump(amt) }
 }
