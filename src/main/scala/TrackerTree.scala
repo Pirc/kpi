@@ -24,8 +24,6 @@ object TrackerTreeApiImpl {
 
 class TrackerTreeApiImpl(val config: Config) extends TrackerTreeApi {
   println("Initialize actor tree")
-  val e = new Exception()
-  e.printStackTrace()
   TrackerTreeApiImpl.config = config
 
   def locate(path: String): TrackerReader = {
