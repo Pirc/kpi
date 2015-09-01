@@ -8,7 +8,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 import com.fasterxml.jackson.databind.ObjectMapper
 
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{Actor, ActorRef, Props, Terminated}
 import akka.pattern.ask
 import akka.util._
 
@@ -52,6 +52,7 @@ object Tracker {
   * new or previously created Tracker.
   */
   case class Bind(path: String)
+  case class EnsureBound(path: String)
 
  /**
   * Find requests are issued by applications that are looking for a 
@@ -111,6 +112,7 @@ class Tracker extends Actor {
     case Tracker.Find(path) => findAndForward(path)
     case Tracker.Found(t) => 
       tracked = Some(context.sender)
+      context.watch(context.sender)
       context.sender ! Tracker.Found(self)
     case Tracker.Status() => 
       context.sender ! Tracker.Response(
@@ -124,9 +126,11 @@ class Tracker extends Actor {
       )
     case Tracker.Shutdown() =>
       context.stop(self)
-    // If the Tracker has received an object it doesn't know about, 
-    // then just send it on to the tracked actor.
+    case Terminated(tracked) =>
+      self ! Tracker.Shutdown()
     case a: Any => 
+      // If the Tracker has received an object it doesn't know about, 
+      // then just send it on to the tracked actor.
       tracked
         .map { t => {
           implicit val timeout = Timeout(5.seconds)
