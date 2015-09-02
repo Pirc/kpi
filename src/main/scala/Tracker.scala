@@ -134,13 +134,13 @@ class Tracker extends Actor {
       else {
         self ! Tracker.Shutdown()
       }
-    case a: Any => 
+    case exec: Tracker.Execute => 
       // If the Tracker has received an object it doesn't know about, 
       // then just send it on to the tracked actor.
       tracked
         .map { t => {
           implicit val timeout = Timeout(5.seconds)
-          val futureResp = (t ? a).mapTo[Tracker.Response]
+          val futureResp = (t ? exec).mapTo[Tracker.Response]
           context.sender ! Await.result(futureResp, 10.seconds)
         }}
         .getOrElse {
