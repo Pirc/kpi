@@ -126,8 +126,14 @@ class Tracker extends Actor {
       )
     case Tracker.Shutdown() =>
       context.stop(self)
-    case Terminated(tracked) =>
-      self ! Tracker.Shutdown()
+    case t @ Terminated(tracked) =>
+      if(!t.existenceConfirmed) {
+        context.system.scheduler.scheduleOnce(
+          30.second, self, Tracker.Shutdown())
+      }
+      else {
+        self ! Tracker.Shutdown()
+      }
     case a: Any => 
       // If the Tracker has received an object it doesn't know about, 
       // then just send it on to the tracked actor.
