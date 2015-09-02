@@ -18,7 +18,7 @@ import akka.actor.{ Actor
 class LocalActor extends Actor with TrackerClientActor { 
   def pathToBind = None
 
-  override def receive = trackerReceive
+  def localReceive: Receive = { PartialFunction.empty }
 }
 
 /**
@@ -35,6 +35,18 @@ class LocalActor extends Actor with TrackerClientActor {
  */
 trait TrackerClientActor extends Actor {
   def pathToBind: Option[String]
+
+ /**
+  * Actors mixing in the TrackerClientActor should define their receive
+  * operation in this localReceive method.  The TrackerClient will then 
+  * add in it's own message handling to be executed for Tracker-specific
+  * calls.
+  */
+  def localReceive: Receive
+
+  override def receive = localReceive orElse trackerReceive
+
+  def become(r: Receive) = context.become(r orElse trackerReceive)
 
  /**
   * Stores the path that was ultimately bound, so that we have it for our
