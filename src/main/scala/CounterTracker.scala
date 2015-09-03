@@ -16,7 +16,7 @@ object CounterTracker {
 
   Tracker.factories.push({case Match(t) => Props[CounterTracker]})
 
-  case class Bump(amount: Int = 1)
+  case class Bump(amount: Int = 1) extends TrackerMessage
 }
 
 /**

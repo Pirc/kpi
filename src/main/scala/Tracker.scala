@@ -40,8 +40,10 @@ class RootTracker extends Tracker {
   }
 }
 
+abstract class TrackerMessage()
+
 object Tracker {
-  case class Initialize()
+  case class Initialize() extends TrackerMessage
  /**
   * Bind messages are sent to Trackers when an application is trying to 
   * obtain an instance of a Tracker to send information to.  The 
@@ -51,8 +53,8 @@ object Tracker {
   * means that any legal path that is requested will ultimately find a 
   * new or previously created Tracker.
   */
-  case class Bind(path: String)
-  case class EnsureBound(path: String)
+  case class Bind(path: String) extends TrackerMessage
+  case class EnsureBound(path: String) extends TrackerMessage
 
  /**
   * Find requests are issued by applications that are looking for a 
@@ -61,32 +63,32 @@ object Tracker {
   * to trackers for the purpose of getting some informaiton or invoking a 
   * command on the Tracker.
   */
-  case class Find(path: String)
+  case class Find(path: String) extends TrackerMessage
 
 
  /**
   * When a Tracker is found as the result of a Find(path) request, the 
   * ActorRef that was found is sent back as a Found() object.
   */
-  case class Found(ref: ActorRef)
+  case class Found(ref: ActorRef) extends TrackerMessage
 
-  case class NotFound(path: String)
+  case class NotFound(path: String) extends TrackerMessage
  
  /**
   * List messages are used to obtain a list of children of this Tracker.
   */
-  case class List()
+  case class List() extends TrackerMessage
 
-  case class Status()
+  case class Status() extends TrackerMessage
  /**
   * Execute messages are sent to Trackers in order to kick off some 
   * application defined action in the system.
   */
-  case class Execute(action: String)
+  case class Execute(action: String) extends TrackerMessage
 
-  case class Response(json: String)
+  case class Response(json: String) extends TrackerMessage
 
-  case class Shutdown()
+  case class Shutdown() extends TrackerMessage
 
   val factories = Stack[PartialFunction[String, Props]]()
 

@@ -100,7 +100,7 @@ trait TrackerClientActor extends Actor {
     case Terminated(ref) => 
       println(s"tracker ${pathBound.get} terminated, attempting to re-bind.")
       self ! Tracker.Bind(pathBound.get)
-    case a:Any => tracker.map { ref => ref ! a }
+    case msg: TrackerMessage => tracker.map { ref => ref ! msg }
   }
 
   def shutdown = { self ! Tracker.Shutdown() }

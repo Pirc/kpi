@@ -17,9 +17,9 @@ object LogTracker {
 
   Tracker.factories.push({case Match(t) => Props[LogTracker]})
 
-  case class Info(msg: String)
-  case class Warning(msg: String)
-  case class Error(msg: String)
+  case class Info(msg: String) extends TrackerMessage
+  case class Warning(msg: String) extends TrackerMessage
+  case class Error(msg: String) extends TrackerMessage
 }
 
 class LogTracker extends Tracker {
