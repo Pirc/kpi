@@ -26,7 +26,11 @@ class LogTracker extends Tracker {
   val bufferSize = 20
   var messages = Seq[Message]()
 
-  case class Message(timestamp: java.util.Date, level: Int, message: String)
+  case class Message(timestamp: java.util.Date, level: Int, message: String) {
+    def getTimestamp = timestamp
+    def getLevel = level
+    def getMessage = message
+  }
 
   override def receive = logReceive orElse super.receive
 
