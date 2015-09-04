@@ -18,13 +18,18 @@ object TrackerTreeApiImpl {
 
   lazy val root = kpiSystem.actorOf(Props[RootTracker], name = "root")
 
+  def initialize(c: Config) = {
+    config = c
+    root
+  }
+
   CounterTracker
   LogTracker
 }
 
 class TrackerTreeApiImpl(val config: Config) extends TrackerTreeApi {
   println("Initialize actor tree")
-  TrackerTreeApiImpl.config = config
+  TrackerTreeApiImpl.initialize(config)
 
   def locate(path: String): TrackerReader = {
     new TrackerReaderImpl(TrackerTreeApiImpl.root, path)

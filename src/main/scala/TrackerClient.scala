@@ -60,7 +60,6 @@ trait TrackerClientActor extends Actor {
   }
 
   override def postStop = {
-    shutdown
     super.postStop
   }
 
@@ -80,37 +79,69 @@ trait TrackerClientActor extends Actor {
   var ensureBound: Cancellable = _
 
   def trackerReceive: Receive = {
+
     case Tracker.Bind(path) => 
+      // Save off the path that we are binding to, in case we need it
+      // later to reconnect.  Also set a timeout for the Found() response
+      // to come back.
+      println(s"received bind request for ${path}")
       pathBound = Some(path)
       implicit val ec = context.dispatcher
-      println(s"sending bind request kpi root: ${path}")
       root ! Tracker.Bind(path)
       ensureBound = context.system.scheduler.scheduleOnce(30.second, self, 
         Tracker.EnsureBound(path))
+
     case Tracker.EnsureBound(path) =>
-      println("Binding did not happen within 30s.  Retrying")
+      // EnsureBound() is sent on a Bind timeout (see Tracker.Bind() 
+      // handler).  If this message is received, then retry the bind.
       self ! Tracker.Bind(path)
+
     case Tracker.Found(ref) => 
-      println(s"received tracker ref back from kpi root: ${ref.path}")
+      // The TrackerTree found the requested path!  Cancel our timeout
+      // watcher, create a watch on the TrackerTree in case it shuts
+      // down, and save a reference to the actor that we are bound to
+      // in the tree.
+      println(s"path bound ${ref.path}")
       ensureBound.cancel
       context.watch(ref)
       tracker = Some(ref)
+
     case Tracker.Response(json) => println(json)
+
     case Tracker.Execute(fn) => doExecute(fn)
+
     case Terminated(ref) => 
-      println(s"tracker ${pathBound.get} terminated, attempting to re-bind.")
+      // The TrackerTree may go down due to failure or maintenance.  Whether
+      // it goes down cleanly or not, attempt to re-bind this tracker client
+      // to the tree (and enter into the retry cycle for failures to do so).
       self ! Tracker.Bind(pathBound.get)
+
+    case shutdown @ Tracker.Shutdown() =>
+      // Shutting down the Tracker Client should also remove the tracker
+      // from the tree (assuming that this tracker client represents a
+      // transient process that only needs to be tracked for the duration
+      // of its work.
+      tracker.map { ref => ref ! shutdown }
+      context.stop(self)
+
+    case detach @ Tracker.Detach() =>
+      // Detaching a tracker client will shut down the local tracker client
+      // but not the Tracker in the tree.
+      context.stop(self)
+
     case msg: TrackerMessage => tracker.map { ref => ref ! msg }
   }
 
-  def shutdown = { self ! Tracker.Shutdown() }
+  def detach = context.self ! Tracker.Detach()
+  def shutdown = context.self ! Tracker.Shutdown()
 }
 
-class TrackerClientImpl(val system: ActorSystem, val path: String) {
+class TrackerClientImpl(val system: ActorSystem, val path: String) 
+extends TrackerClient {
   val tracker = system.actorOf(Props[LocalActor])
   tracker ! Tracker.Bind(path)
+  println(s"starting tracker client for ${path}")
 
-  def shutdown = {
-    tracker ! Tracker.Shutdown()
-  }
+  def shutdown = tracker ! Tracker.Shutdown()
+  def detach = tracker ! Tracker.Detach() 
 }

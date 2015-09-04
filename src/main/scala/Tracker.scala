@@ -88,6 +88,7 @@ object Tracker {
 
   case class Response(json: String) extends TrackerMessage
 
+  case class Detach() extends TrackerMessage
   case class Shutdown() extends TrackerMessage
 
   val factories = Stack[PartialFunction[String, Props]]()
@@ -110,9 +111,12 @@ class Tracker extends Actor {
 
   override def receive = {
     case Tracker.Initialize() => initialize
-    case Tracker.Bind(path) => bindAndForward(path)
+    case Tracker.Bind(path) => 
+      println(s"In tracker tree, received bind request for ${path}")
+      bindAndForward(path)
     case Tracker.Find(path) => findAndForward(path)
     case Tracker.Found(t) => 
+      println(s"In tracker tree, found actor ${t.path}, returning to binder")
       tracked = Some(context.sender)
       context.watch(context.sender)
       context.sender ! Tracker.Found(self)
@@ -130,10 +134,7 @@ class Tracker extends Actor {
       context.stop(self)
     case t @ Terminated(tracked) =>
       if(!t.existenceConfirmed) {
-        context.system.scheduler.scheduleOnce(
-          30.second, self, Tracker.Shutdown())
-      }
-      else {
+        println(s"shutting down tracker ${self.path}")
         self ! Tracker.Shutdown()
       }
     case exec: Tracker.Execute => 
