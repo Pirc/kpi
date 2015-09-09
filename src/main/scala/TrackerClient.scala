@@ -1,10 +1,13 @@
-package pirc.kpi
+package pirc.kpi.impl
 
 import java.util.concurrent.TimeUnit
 
+import scala.collection.mutable.Stack
 import scala.concurrent.duration._
 
 import com.typesafe.config.ConfigFactory
+import com.typesafe.config.Config
+
 import akka.actor.{ Actor
                   , ActorRef
                   , ActorSelection
@@ -14,6 +17,32 @@ import akka.actor.{ Actor
                   , Terminated
                   }
 
+object TrackerClient {
+  var config: Config = _
+
+  lazy val system = ActorSystem("KpiClient", 
+    config.getConfig("KpiClient").withFallback(config))
+
+  def initialize(c: Config) = {
+    config = c
+    system
+  }
+
+  val factories = Stack[PartialFunction[String, _ <: pirc.kpi.TrackerClient]]()
+
+  def apply(path: String): pirc.kpi.TrackerClient = {
+    factories
+      .find { pf => pf.isDefinedAt(path) }
+      .map { pf => pf.apply(path) }
+      .getOrElse { new TrackerClient(path) }
+  }
+}
+
+class TrackerClientFactory extends pirc.kpi.TrackerClientFactory {
+  def locate(path: String): pirc.kpi.TrackerClient = {
+    TrackerClient.apply(path)
+  }
+}
 
 class LocalActor extends Actor with TrackerClientActor { 
   def pathToBind = None
@@ -136,9 +165,9 @@ trait TrackerClientActor extends Actor {
   def shutdown = context.self ! Tracker.Shutdown()
 }
 
-class TrackerClientImpl(val system: ActorSystem, val path: String) 
-extends TrackerClient {
-  val tracker = system.actorOf(Props[LocalActor])
+class TrackerClient(val path: String) 
+extends pirc.kpi.TrackerClient {
+  val tracker = TrackerClient.system.actorOf(Props[LocalActor])
   tracker ! Tracker.Bind(path)
   println(s"starting tracker client for ${path}")
 

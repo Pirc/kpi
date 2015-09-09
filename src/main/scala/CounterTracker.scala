@@ -1,4 +1,4 @@
-package pirc.kpi
+package pirc.kpi.impl
 
 import scala.collection.JavaConverters._
 
@@ -12,9 +12,15 @@ import akka.actor.{Actor, ActorSystem, Props}
 // 
 // ----------------------------------------------------------------------
 object CounterTracker {
-  val Match = "(.*)Ctr$".r
+  val Match = "(.*Ctr)$".r
 
-  Tracker.factories.push({case Match(t) => Props[CounterTracker]})
+  Tracker.factories.push(
+    { case Match(name) => Props[CounterTracker] }
+  )
+
+  TrackerClient.factories.push(
+    { case Match(path) => new CounterTrackerClient(path) }
+  )
 
   case class Bump(amount: Int = 1) extends TrackerMessage
 }
@@ -37,6 +43,18 @@ class CounterTracker extends Tracker {
   }
 
   override def status: Any = counter.status
+}
+
+class CounterTrackerClient(path: String) 
+extends TrackerClient(path)
+with pirc.kpi.CounterTrackerClient {
+  def bump(amt: Integer) = tracker ! CounterTracker.Bump(amt)
+}
+
+trait CounterTrackerClientActor 
+extends TrackerClientActor
+with pirc.kpi.CounterTrackerClient {
+  def bump(amt: Integer) = tracker.map { t => t ! CounterTracker.Bump(amt) }
 }
 
 /**
@@ -134,17 +152,4 @@ object HistogramValueCalculator {
       def calculateValue(offset: Long): Int = 0
     }
   }
-}
-
-class CounterTrackerClientImpl(system: ActorSystem, path: String) 
-extends TrackerClientImpl(system, path)
-with CounterTrackerClient {
-  def bump(amt: Integer) = tracker ! CounterTracker.Bump(amt)
-}
-
-
-trait CounterTrackerClientActor 
-extends TrackerClientActor
-with CounterTrackerClient {
-  def bump(amt: Integer) = tracker.map { t => t ! CounterTracker.Bump(amt) }
 }

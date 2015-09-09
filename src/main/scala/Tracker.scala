@@ -1,4 +1,4 @@
-package pirc.kpi
+package pirc.kpi.impl
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Stack

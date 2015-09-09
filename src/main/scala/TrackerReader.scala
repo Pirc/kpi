@@ -1,4 +1,4 @@
-package pirc.kpi
+package pirc.kpi.impl
 
 import com.typesafe.config.ConfigFactory
 
@@ -9,8 +9,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class TrackerReaderImpl(val root: ActorRef, val path: String) 
-extends TrackerReader {
+class TrackerReader(val root: ActorRef, val path: String) 
+extends pirc.kpi.TrackerReader {
   def execute(fn: String): String = findAndSend(Tracker.Execute(fn))
   def list(): String = findAndSend(Tracker.List())
   def status(): String = findAndSend(Tracker.Status())
