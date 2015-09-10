@@ -133,7 +133,7 @@ class Tracker extends Actor {
     case Tracker.Shutdown() =>
       context.stop(self)
     case t @ Terminated(tracked) =>
-      if(!t.existenceConfirmed) {
+      if(t.addressTerminated) {
         println(s"shutting down tracker ${self.path}")
         self ! Tracker.Shutdown()
       }

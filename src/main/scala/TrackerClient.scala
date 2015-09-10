@@ -3,6 +3,7 @@ package pirc.kpi.impl
 import java.util.concurrent.TimeUnit
 
 import scala.collection.mutable.Stack
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 import com.typesafe.config.ConfigFactory
@@ -14,8 +15,11 @@ import akka.actor.{ Actor
                   , ActorSystem
                   , Cancellable
                   , Props
+                  , Stash
                   , Terminated
                   }
+import akka.pattern.ask
+import akka.util._
 
 object TrackerClient {
   var config: Config = _
@@ -38,9 +42,11 @@ object TrackerClient {
   }
 }
 
-class TrackerClientFactory extends pirc.kpi.TrackerClientFactory {
+class TrackerClientFactory(config: Config) extends pirc.kpi.TrackerClientFactory {
+  TrackerClient.initialize(config)
+
   def locate(path: String): pirc.kpi.TrackerClient = {
-    TrackerClient.apply(path)
+    TrackerClient(path)
   }
 }
 
@@ -62,7 +68,7 @@ class LocalActor extends Actor with TrackerClientActor {
  * on an already existing actor is that it gives us the ability to receive
  * Tracker messages and act on them right from within the app.
  */
-trait TrackerClientActor extends Actor {
+trait TrackerClientActor extends Actor with Stash {
   def pathToBind: Option[String]
 
  /**
@@ -73,7 +79,7 @@ trait TrackerClientActor extends Actor {
   */
   def localReceive: Receive
 
-  override def receive = localReceive orElse trackerReceive
+  override def receive = trackerInit
 
   def become(r: Receive) = context.become(r orElse trackerReceive)
 
@@ -107,8 +113,7 @@ trait TrackerClientActor extends Actor {
 
   var ensureBound: Cancellable = _
 
-  def trackerReceive: Receive = {
-
+  def trackerInit: Receive = {
     case Tracker.Bind(path) => 
       // Save off the path that we are binding to, in case we need it
       // later to reconnect.  Also set a timeout for the Found() response
@@ -134,7 +139,13 @@ trait TrackerClientActor extends Actor {
       ensureBound.cancel
       context.watch(ref)
       tracker = Some(ref)
+      unstashAll()
+      become(localReceive)
 
+    case a: Any => stash()
+  }
+
+  def trackerReceive: Receive = {
     case Tracker.Response(json) => println(json)
 
     case Tracker.Execute(fn) => doExecute(fn)
@@ -143,6 +154,7 @@ trait TrackerClientActor extends Actor {
       // The TrackerTree may go down due to failure or maintenance.  Whether
       // it goes down cleanly or not, attempt to re-bind this tracker client
       // to the tree (and enter into the retry cycle for failures to do so).
+      context.become(trackerInit)
       self ! Tracker.Bind(pathBound.get)
 
     case shutdown @ Tracker.Shutdown() =>

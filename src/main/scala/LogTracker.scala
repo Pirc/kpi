@@ -40,6 +40,7 @@ class LogTracker extends Tracker {
   override def receive = logReceive orElse super.receive
 
   private def addMessage(level: Int, msg: String): Seq[Message] = {
+    println(s"add message ${msg}, level ${level} to the stack which has ${messages.size} messages.")
     (Message(new java.util.Date, level, msg) +: messages).take(bufferSize)
   }
 
