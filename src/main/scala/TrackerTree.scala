@@ -1,4 +1,4 @@
-package pirc.kpi
+package pirc.kpi.impl
 
 import com.typesafe.config.Config
 import akka.actor.{ActorSystem, Props}
@@ -10,7 +10,7 @@ import akka.actor.{ActorSystem, Props}
  * but the main KPI machine will also need an instance of this to be created 
  * and also for a Config to be injected.
  */
-object TrackerTreeApiImpl {
+object TrackerTreeApi {
   var config: Config = _
 
   lazy val kpiSystem = 
@@ -18,17 +18,20 @@ object TrackerTreeApiImpl {
 
   lazy val root = kpiSystem.actorOf(Props[RootTracker], name = "root")
 
+  def initialize(c: Config) = {
+    config = c
+    root
+  }
+
   CounterTracker
   LogTracker
 }
 
-class TrackerTreeApiImpl(val config: Config) extends TrackerTreeApi {
+class TrackerTreeApi(val config: Config) extends pirc.kpi.TrackerTreeApi {
   println("Initialize actor tree")
-  val e = new Exception()
-  e.printStackTrace()
-  TrackerTreeApiImpl.config = config
+  TrackerTreeApi.initialize(config)
 
-  def locate(path: String): TrackerReader = {
-    new TrackerReaderImpl(TrackerTreeApiImpl.root, path)
+  def locate(path: String): pirc.kpi.TrackerReader = {
+    new TrackerReader(TrackerTreeApi.root, path)
   }
 }
